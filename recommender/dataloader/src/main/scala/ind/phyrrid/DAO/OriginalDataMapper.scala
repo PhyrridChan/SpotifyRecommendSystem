@@ -1,0 +1,25 @@
+package ind.phyrrid.DAO
+
+import org.apache.spark.sql.{DataFrame, SparkSession}
+import ind.phyrrid.utils.FileHandler.JsonFileHandler.JsonFile2Map
+
+import scala.collection.mutable
+
+object OriginalDataMapper {
+  def dataFileMap(dataFile: String = "DataFileMapper.json"): mutable.Map[String, String] = {
+    val path = this.getClass.getClassLoader.getResource(dataFile).getPath
+    JsonFile2Map(path)
+  }
+
+  def csv2DataFrame(spark: SparkSession, path: String): DataFrame =
+    spark.read.option("header", "true").option("inferSchema", "true").csv(path)
+
+  def loadAllData(spark: SparkSession): mutable.Map[String, DataFrame] = {
+    val path_map = dataFileMap()
+
+    val dataframe_map: mutable.Map[String, DataFrame] = mutable.Map()
+    path_map.foreach(k => dataframe_map += (k._1 -> csv2DataFrame(spark, k._2)))
+
+    dataframe_map
+  }
+}

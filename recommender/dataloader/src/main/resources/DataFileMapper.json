@@ -1,0 +1,12 @@
+{
+  "playlist": "/Users/phyrridchan/Desktop/Spark CD/playlist/spotify_dataset.csv",
+  "audio_features": "/Users/phyrridchan/Desktop/Spark CD/spotify/audio_features.csv",
+  "albums": "/Users/phyrridchan/Desktop/Spark CD/spotify/albums.csv",
+  "artists": "/Users/phyrridchan/Desktop/Spark CD/spotify/artists.csv",
+  "genres": "/Users/phyrridchan/Desktop/Spark CD/spotify/genres.csv",
+  "r_albums_artists": "/Users/phyrridchan/Desktop/Spark CD/spotify/r_albums_artists.csv",
+  "r_artist_genre": "/Users/phyrridchan/Desktop/Spark CD/spotify/r_artist_genre.csv",
+  "r_track_artist": "/Users/phyrridchan/Desktop/Spark CD/spotify/r_track_artist.csv",
+  "r_albums_tracks": "/Users/phyrridchan/Desktop/Spark CD/spotify/r_albums_tracks.csv",
+  "tracks": "/Users/phyrridchan/Desktop/Spark CD/spotify/tracks.csv"
+}
