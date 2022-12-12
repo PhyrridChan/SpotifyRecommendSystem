@@ -1,12 +1,21 @@
-import ind.phyrrid.DAO.OriginalDataMapper.dataFileMap
-import org.apache.log4j.Logger
+import com.mongodb.casbah.commons.MongoDBObject
+import com.mongodb.casbah.{MongoClient, MongoClientURI}
+import ind.phyrrid.DAO.MongoConfig
+import ind.phyrrid.DAO.OriginalDataMapper.{csv2DataFrame, dataFileMap, loadAllDataWithIndex}
+import org.apache.spark.SparkConf
+import org.apache.spark.sql.SparkSession
+import com.mongodb.spark.sql.toMongoDataFrameWriterFunctions
+
+import scala.collection.mutable
 
 object test {
-  private val logger = Logger.getLogger("test")
+  case class sex_test(name: String, age: Int, length: Int, time: String)
+
   def main(args: Array[String]): Unit = {
-    for( i <- (0 to 10)){
-      logger.info(s"infoTest$i")
-      logger.error(s"errTest$i")
-    }
+    val sparkConf: SparkConf = new SparkConf().setMaster("local[*]").setAppName("StatisticsRecommender")
+    val spark = SparkSession.builder().config(sparkConf).getOrCreate()
+    val (allData, indexInfo) = loadAllDataWithIndex(spark)
+    println(allData)
+    println(indexInfo)
   }
 }

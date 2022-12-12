@@ -1,12 +1,66 @@
 {
-  "playlist": "/Users/phyrridchan/Desktop/Spark CD/playlist/spotify_dataset.csv",
-  "audio_features": "/Users/phyrridchan/Desktop/Spark CD/spotify/audio_features.csv",
-  "albums": "/Users/phyrridchan/Desktop/Spark CD/spotify/albums.csv",
-  "artists": "/Users/phyrridchan/Desktop/Spark CD/spotify/artists.csv",
-  "genres": "/Users/phyrridchan/Desktop/Spark CD/spotify/genres.csv",
-  "r_albums_artists": "/Users/phyrridchan/Desktop/Spark CD/spotify/r_albums_artists.csv",
-  "r_artist_genre": "/Users/phyrridchan/Desktop/Spark CD/spotify/r_artist_genre.csv",
-  "r_track_artist": "/Users/phyrridchan/Desktop/Spark CD/spotify/r_track_artist.csv",
-  "r_albums_tracks": "/Users/phyrridchan/Desktop/Spark CD/spotify/r_albums_tracks.csv",
-  "tracks": "/Users/phyrridchan/Desktop/Spark CD/spotify/tracks.csv"
+  "playlist": {
+    "path": "/Users/phyrridchan/Desktop/Spark CD/playlist/spotify_dataset.csv",
+    "index": [
+      {
+        "user_id": 1
+      },
+      {
+        "playlistname": 1
+      }
+    ]
+  },
+  "audio_features": {
+    "path": "/Users/phyrridchan/Desktop/Spark CD/spotify/audio_features.csv",
+    "index": [
+      {
+        "id": 1
+      }
+    ]
+  },
+  "albums": {
+    "path": "/Users/phyrridchan/Desktop/Spark CD/spotify/albums.csv",
+    "index": [
+      {
+        "id": 1
+      },
+      {
+        "popularity": -1
+      }
+    ]
+  },
+  "artists": {
+    "path": "/Users/phyrridchan/Desktop/Spark CD/spotify/artists.csv",
+    "index": [
+      {
+        "id": 1
+      }
+    ]
+  },
+  "genres": {
+    "path": "/Users/phyrridchan/Desktop/Spark CD/spotify/genres.csv"
+  },
+  "r_albums_artists": {
+    "path": "/Users/phyrridchan/Desktop/Spark CD/spotify/r_albums_artists.csv"
+  },
+  "r_artist_genre": {
+    "path": "/Users/phyrridchan/Desktop/Spark CD/spotify/r_artist_genre.csv"
+  },
+  "r_track_artist": {
+    "path": "/Users/phyrridchan/Desktop/Spark CD/spotify/r_track_artist.csv"
+  },
+  "r_albums_tracks": {
+    "path": "/Users/phyrridchan/Desktop/Spark CD/spotify/r_albums_tracks.csv"
+  },
+  "tracks": {
+    "path": "/Users/phyrridchan/Desktop/Spark CD/spotify/tracks.csv",
+    "index": [
+      {
+        "id": 1
+      },
+      {
+        "popularity": -1
+      }
+    ]
+  }
 }
