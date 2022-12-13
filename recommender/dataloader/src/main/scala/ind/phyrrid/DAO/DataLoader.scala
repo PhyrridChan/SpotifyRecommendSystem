@@ -4,22 +4,18 @@ import com.mongodb.casbah.commons.MongoDBObject
 import com.mongodb.casbah.{MongoClient, MongoClientURI}
 import com.mongodb.spark.sql.toMongoDataFrameWriterFunctions
 import ind.phyrrid.DAO.OriginalDataMapper.loadAllDataWithIndex
+import org.apache.log4j.Logger
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.functions.{collect_set, concat_ws}
-import org.apache.spark.sql.{DataFrame, Dataset, Row, SparkSession}
-import org.elasticsearch.action.admin.indices.create.CreateIndexRequest
-import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequest
-import org.elasticsearch.action.admin.indices.exists.indices.IndicesExistsRequest
-import org.elasticsearch.common.settings.Settings
-import org.elasticsearch.spark.sql.sparkDatasetFunctions
+import org.apache.spark.sql.types.{IntegerType, LongType}
+import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession}
 
-import java.net.InetAddress
 import scala.collection.mutable
 
 
 case class MongoConfig(uri: String, db: String)
 
-case class ESConfig(httpHosts: String, transportHosts: String, index: String, clustername: String)
+case class ESConfig(httpHosts: String, transportHosts: String, index: String, clusterName: String, docName: String)
 
 case class albums_record(id: String, name: String, album_group: String, album_type: String, release_date: String, popularity: String)
 
@@ -40,6 +36,7 @@ case class r_track_artist_record(track_id: String, artist_id: String)
 case class tracks_record(id: String, disc_number: Int, duration: Int, explicit: Int, audio_feature_id: String, name: String, preview_url: String, track_number: String, popularity: String, is_playable: String)
 
 object DataLoader {
+  private val logger = Logger.getLogger("DataLoader")
 
   def main(args: Array[String]): Unit = {
     val config: Map[String, String] = Map(
@@ -49,28 +46,60 @@ object DataLoader {
       "es.httpHosts" -> "localhost:9200",
       "es.transportHosts" -> "localhost:9300",
       "es.index" -> "recommender",
-      "es.cluster.name" -> "elasticsearch_phyrridchan"
+      "es.cluster.name" -> "elasticsearch_phyrridchan",
+      "es.doc.name" -> "Spotify"
     )
 
     val sparkConf = new SparkConf().setMaster(config("spark.cores")).setAppName("DataLoader")
-    val REGEX_HOST_PORT = "(.+):(\\d+)".r
-    implicit val eSConfig: ESConfig = ESConfig(config("es.httpHosts"), config("es.transportHosts"), config("es.index"), config("es.cluster.name"))
-    eSConfig.transportHosts.split(",").foreach{
-      case REGEX_HOST_PORT(host: String, port: String) =>
-        sparkConf.set("es.nodes", "127.0.0.1");
-        sparkConf.set("es.port", "9200");
-    }
 
     val spark = SparkSession.builder().config(sparkConf).getOrCreate()
 
     implicit val mongoConfig: MongoConfig = MongoConfig(config("mongo.uri"), config("mongo.db"))
 
     val (allData, indexInfo) = loadAllDataWithIndex(spark)
-//    storeDataInMongoDB(allData, indexInfo)
+    val allDataRefined = MongoDataHandler(spark, allData)
+    logger.info(allDataRefined)
+    storeDataInMongoDB(allDataRefined, indexInfo)
 
-    storeDataInES(ESDataHandler(spark, allData))
+    implicit val eSConfig: ESConfig = ESConfig(config("es.httpHosts"), config("es.transportHosts"), config("es.index"), config("es.cluster.name"), config("es.doc.name"))
+    storeDataInES(ESDataHandler(spark, allDataRefined))
 
     spark.stop()
+  }
+
+  def MongoDataHandler(spark: SparkSession, allData: mutable.Map[String, DataFrame]): mutable.Map[String, DataFrame] = {
+    import spark.implicits._
+
+    for ((k, v) <- allData) {
+      k match {
+        case "tracks" =>
+          allData.put(k, v.as[tracks_record].filter(record =>
+            record.popularity != null && record.popularity.matches("^\\d+"))
+            .withColumn("popularity", $"popularity".cast(IntegerType))
+            .toDF())
+        case "albums" =>
+          allData.put(k, v.as[albums_record].filter(record =>
+            (record.popularity != null && record.popularity.matches("^\\d+")) &&
+              (record.release_date != null && record.release_date.matches("^-?\\d+")))
+            .withColumn("popularity", $"popularity".cast(IntegerType))
+            .withColumn("release_date", $"release_date".cast(LongType))
+            .toDF())
+        case "artists" =>
+          allData.put(k, v.as[artists_record].filter(record =>
+            (record.popularity != null && record.popularity.matches("^\\d+")) &&
+              (record.followers != null && record.followers.matches("^\\d+")))
+            .withColumn("popularity", $"popularity".cast(IntegerType))
+            .withColumn("followers", $"followers".cast(LongType))
+            .toDF())
+        case _ =>
+      }
+
+      logger.info(k)
+      logger.info(allData(k).printSchema())
+      allData(k).persist()
+    }
+
+    allData
   }
 
   def storeDataInMongoDB(allData: mutable.Map[String, DataFrame], indexInfo: mutable.Map[String, Array[(String, Int)]])(implicit mongoConfig: MongoConfig): Unit = {
@@ -80,7 +109,7 @@ object DataLoader {
       v.write
         .option("uri", mongoConfig.uri)
         .option("collection", k)
-        .mode("overwrite")
+        .mode(SaveMode.Overwrite)
         .mongo()
 
       val indexes: Array[(String, Int)] = indexInfo.getOrElse(k, Array[(String, Int)]())
@@ -93,7 +122,7 @@ object DataLoader {
   }
 
 
-  def ESDataHandler(spark: SparkSession, allData: mutable.Map[String, DataFrame]): DataFrame ={
+  def ESDataHandler(spark: SparkSession, allData: mutable.Map[String, DataFrame]): DataFrame = {
     import spark.implicits._
     val tracks = allData("tracks").select($"id" as "track_id", $"name" as "track_name")
     val albums = allData("albums").select($"id" as "album_id", $"name" as "album_name")
@@ -143,6 +172,18 @@ object DataLoader {
   }
 
   def storeDataInES(dataFrame: DataFrame)(implicit eSConfig: ESConfig): Unit = {
-    dataFrame.saveToEs(eSConfig.index + "/" + "Spotify")
+    val option_map: mutable.Map[String, String] = mutable.Map()
+    option_map.put("es.index.auto.create", "true")
+    val REGEX_HOST_PORT = "(.+):(\\d+)".r
+    eSConfig.httpHosts.split(",").foreach {
+      case REGEX_HOST_PORT(host: String, port: String) =>
+        option_map.put("es.nodes", host)
+        option_map.put("es.port", port);
+    }
+
+    dataFrame.write.format("org.elasticsearch.spark.sql")
+      .options(option_map)
+      .mode(SaveMode.Overwrite)
+      .save(eSConfig.index + "/" + eSConfig.docName)
   }
 }

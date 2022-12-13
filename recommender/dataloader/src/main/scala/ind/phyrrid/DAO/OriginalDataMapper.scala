@@ -17,7 +17,7 @@ object OriginalDataMapper {
   }
 
   def csv2DataFrame(spark: SparkSession, path: String): DataFrame =
-    spark.read.option("header", "true").option("inferSchema", "true").csv(path)
+    spark.read.option("header", "true").option("inferSchema", "true").option("escape", "\"").csv(path)
 
   def loadAllData(spark: SparkSession): mutable.Map[String, DataFrame] = {
     val path_map = dataFileMap()

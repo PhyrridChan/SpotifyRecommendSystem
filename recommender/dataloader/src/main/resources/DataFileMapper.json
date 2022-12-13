@@ -34,6 +34,12 @@
     "index": [
       {
         "id": 1
+      },
+      {
+        "popularity": -1
+      },
+      {
+        "followers": -1
       }
     ]
   },

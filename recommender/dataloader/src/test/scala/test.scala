@@ -5,6 +5,7 @@ import ind.phyrrid.DAO.OriginalDataMapper.{csv2DataFrame, dataFileMap, loadAllDa
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
 import com.mongodb.spark.sql.toMongoDataFrameWriterFunctions
+import ind.phyrrid.DAO.DataLoader.MongoDataHandler
 
 import scala.collection.mutable
 
@@ -15,7 +16,8 @@ object test {
     val sparkConf: SparkConf = new SparkConf().setMaster("local[*]").setAppName("StatisticsRecommender")
     val spark = SparkSession.builder().config(sparkConf).getOrCreate()
     val (allData, indexInfo) = loadAllDataWithIndex(spark)
-    println(allData)
-    println(indexInfo)
+
+    import spark.implicits._
+    allData("tracks").where($"id" === "5edi1NCQfGQqjbRFdpgIM0").show()
   }
 }
