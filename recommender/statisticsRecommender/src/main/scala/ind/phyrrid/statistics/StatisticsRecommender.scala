@@ -4,10 +4,10 @@ import com.mongodb.casbah.commons.MongoDBObject
 import com.mongodb.casbah.{MongoClient, MongoClientURI}
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.{DataFrame, SparkSession}
-import org.apache.spark.sql.types.IntegerType
 
 import java.text.SimpleDateFormat
 import java.util.Date
+import scala.language.postfixOps
 
 case class MongoConfig(uri: String, db: String)
 
@@ -50,7 +50,8 @@ object StatisticsRecommender {
     val sortedTracks = spark.sql(
       """
         |select id, name, audio_feature_id, popularity, preview_url
-        |from tracks order by popularity desc
+        |from tracks where popularity > 10
+        |order by popularity desc
         |""".stripMargin)
     storeDFInMongoDB(sortedTracks, Tasks.RES_TOP_TRACKS)
 
@@ -67,7 +68,8 @@ object StatisticsRecommender {
     val sortedAlbums = spark.sql(
       """
         |select id, name, changeDate(release_date) as releaseDate, popularity
-        |from albums order by popularity desc
+        |from albums where popularity > 10
+        |order by popularity desc
         |""".stripMargin)
     sortedAlbums.createTempView("sortedAlbums")
 
@@ -75,10 +77,10 @@ object StatisticsRecommender {
       """
         |select id, name, releaseDate, popularity
         |from sortedAlbums where releaseDate > 202000
-        |order by releaseDate desc
+        |order by releaseDate desc, popularity desc
         |""".stripMargin)
 
-    val releaseDateIndex: Array[(String, Int)] = Array("releaseDate" -> -1)
+    val releaseDateIndex: Array[(String, Int)] = Array("releaseDate" -> -1, "popularity" -> -1)
     storeDFInMongoDB(sortedAlbums, Tasks.RES_TOP_ALBUMS, releaseDateIndex)
     storeDFInMongoDB(annualSortedAlbums, Tasks.RES_ANNUAL_TOP_ALBUMS, releaseDateIndex)
 
@@ -89,7 +91,7 @@ object StatisticsRecommender {
       .option("collection", "r_albums_tracks")
       .format("com.mongodb.spark.sql")
       .load()
-    val tracks_to_albums = sortedTracks.join(r_albums_tracksDF, sortedTracks.col("id") ===
+    val tracks_to_albums = r_albums_tracksDF.join(sortedTracks, sortedTracks.col("id") ===
       r_albums_tracksDF.col("track_id")).select(
       $"album_id", $"track_id", $"name".as("track_name"),
       $"audio_feature_id", $"popularity".as("track_popularity")
@@ -120,12 +122,12 @@ object StatisticsRecommender {
     val sortedArtists_popularity = spark.sql(
       """
         |select name, id, popularity, followers
-        |from artists order by popularity desc
+        |from artists order by popularity desc limit 200
         |""".stripMargin)
     val sortedArtists_followers = spark.sql(
       """
         |select name, id, popularity, followers
-        |from artists order by followers desc
+        |from artists order by followers desc limit 200
         |""".stripMargin)
 
     storeDFInMongoDB(sortedArtists_popularity, Tasks.RES_FAVE_SINGERS)
@@ -177,11 +179,27 @@ object StatisticsRecommender {
         |""".stripMargin)
     storeDFInMongoDB(annualSortedGenre, Tasks.RES_ANNUAL_FAVE_GENRES, releaseDateIndex)
 
+    bark_notify("StatisticsRecommender", "Done", 2)
     mongoClient.close()
     spark.stop()
   }
 
+  def bark_notify(title: String, msg: String, retry: Int): Unit = {
+    for (i <- 0 until retry) {
+      val result_source = scala.io.Source.fromURL(s"https://api.day.app/ZCs6nE83mAH4yLjn7YriUL/$title/$msg$i")
+      if (result_source.mkString.contains("\"code\":200")) {
+        result_source.close()
+        return
+      }
+      result_source.close()
+    }
+  }
+
   def storeDFInMongoDB(df: DataFrame, name: String, indexes: Array[(String, Int)] = null)(implicit mongoConfig: MongoConfig, mongoClient: MongoClient): Unit = {
+    println(s"=====================${name}=====================")
+    println(df.count())
+    df.show(5)
+
     mongoClient(mongoConfig.db)(name).dropCollection()
     df.write
       .option("uri", mongoConfig.uri)
