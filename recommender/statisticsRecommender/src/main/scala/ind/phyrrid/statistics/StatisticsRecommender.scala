@@ -2,6 +2,7 @@ package ind.phyrrid.statistics
 
 import com.mongodb.casbah.commons.MongoDBObject
 import com.mongodb.casbah.{MongoClient, MongoClientURI}
+import org.apache.log4j.Logger
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.{DataFrame, SparkSession}
 
@@ -31,6 +32,8 @@ object StatisticsRecommender {
     )
   }
 
+  private val logger = Logger.getLogger("StatisticsRecommender")
+
   def main(args: Array[String]): Unit = {
 
     val sparkConf: SparkConf = new SparkConf().setMaster(Tasks.config("spark.cores")).setAppName("StatisticsRecommender")
@@ -53,7 +56,7 @@ object StatisticsRecommender {
         |from tracks where popularity > 10
         |order by popularity desc
         |""".stripMargin)
-    storeDFInMongoDB(sortedTracks, Tasks.RES_TOP_TRACKS)
+    storeDFInMongoDB(sortedTracks, Tasks.RES_TOP_TRACKS, Array("popularity" -> -1))
 
     //    albums
     val simpleDateFormat = new SimpleDateFormat("yyyyMM")
@@ -110,7 +113,7 @@ object StatisticsRecommender {
         |from tracks_albums where releaseDate > 202000
         |order by releaseDate desc
         |""".stripMargin)
-    storeDFInMongoDB(annualSortedTracks, Tasks.RES_ANNUAL_TOP_TRACKS, releaseDateIndex)
+    storeDFInMongoDB(annualSortedTracks, Tasks.RES_ANNUAL_TOP_TRACKS, Array("releaseDate" -> -1, "track_popularity" -> -1))
 
     //    artists
     val artistsDF = spark.read
@@ -130,8 +133,8 @@ object StatisticsRecommender {
         |from artists order by followers desc limit 200
         |""".stripMargin)
 
-    storeDFInMongoDB(sortedArtists_popularity, Tasks.RES_FAVE_SINGERS)
-    storeDFInMongoDB(sortedArtists_followers, Tasks.RES_TOP_SINGERS)
+    storeDFInMongoDB(sortedArtists_popularity, Tasks.RES_FAVE_SINGERS, Array("popularity" -> -1))
+    storeDFInMongoDB(sortedArtists_followers, Tasks.RES_TOP_SINGERS, Array("followers" -> -1))
 
     //    r_artist_genre
     val r_artist_genreDF = spark.read
@@ -145,14 +148,16 @@ object StatisticsRecommender {
     )
     artist_genreDF.createTempView("artist_genre")
 
+
     val sortedGenre = spark.sql(
       """
-        |select sum(popularity) as sum_popularity, sum(followers) as sum_followers,
+        |select sum(popularity) as sum_popularity,
+        |avg(popularity) as avg_popularity,
         |count(*) as count, genre
-        |from artist_genre where popularity > 10 and followers > 1000 group by genre
-        |order by count desc, sum_popularity/count desc , sum_followers/count desc
+        |from artist_genre where popularity > 10 group by genre
+        |order by count desc, avg_popularity desc
         |""".stripMargin)
-    storeDFInMongoDB(sortedGenre, Tasks.RES_FAVE_GENRES)
+    storeDFInMongoDB(sortedGenre, Tasks.RES_FAVE_GENRES, Array("count" -> -1, "avg_popularity" -> -1))
 
     //    r_albums_artists
     val r_albums_artistsDF = spark.read
@@ -173,11 +178,13 @@ object StatisticsRecommender {
     albums_artists.createTempView("albums_artists_genre")
     val annualSortedGenre = spark.sql(
       """
-        |select  sum(popularity) as sum_popularity,count(*) as count, genre, releaseDate
+        |select  sum(popularity) as sum_popularity,
+        |avg(popularity) as avg_popularity,
+        |count(*) as count, genre, releaseDate
         |from albums_artists_genre where popularity > 10 and releaseDate > 202000 group by genre, releaseDate
-        |order by releaseDate desc, count desc, sum_popularity/count desc
+        |order by releaseDate desc, count desc, avg_popularity desc
         |""".stripMargin)
-    storeDFInMongoDB(annualSortedGenre, Tasks.RES_ANNUAL_FAVE_GENRES, releaseDateIndex)
+    storeDFInMongoDB(annualSortedGenre, Tasks.RES_ANNUAL_FAVE_GENRES, Array("count" -> -1, "avg_popularity" -> -1, "releaseDate" -> -1))
 
     bark_notify("StatisticsRecommender", "Done", 2)
     mongoClient.close()
@@ -195,9 +202,9 @@ object StatisticsRecommender {
     }
   }
 
-  def storeDFInMongoDB(df: DataFrame, name: String, indexes: Array[(String, Int)] = null)(implicit mongoConfig: MongoConfig, mongoClient: MongoClient): Unit = {
-    println(s"=====================${name}=====================")
-    println(df.count())
+  def storeDFInMongoDB(df: DataFrame, name: String, indexes: Array[(String, Int)])(implicit mongoConfig: MongoConfig, mongoClient: MongoClient): Unit = {
+    logger.info(s"=====================${name}=====================")
+    logger.info(df.count())
     df.show(5)
 
     mongoClient(mongoConfig.db)(name).dropCollection()
